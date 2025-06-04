@@ -527,6 +527,7 @@ dependencies = [
  "crossbeam",
  "num_cpus",
  "serde",
+ "serde_json",
  "sled",
  "ssh2",
  "tokio",
