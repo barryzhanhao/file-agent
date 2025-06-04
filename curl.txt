@@ -1,7 +1,18 @@
-curl -X POST http://127.0.0.1:8080/download \
+curl -X POST http://127.0.0.1:8080/sftp/download \
      -H "Content-Type: application/json" \
      -d '{"local_path": "download.txt", "remote_path": "/upload/remote_file.txt"}'
 
- curl -X POST http://127.0.0.1:8080/upload \
+ curl -X POST http://127.0.0.1:8080/sftp/upload \
      -H "Content-Type: application/json" \
      -d '{"local_path": "local.txt", "remote_path": "/upload/remote_file.txt"}'
+
+ curl http://localhost:8080/sftp/task/3438d00b-673c-4c17-af62-44809f8a076a
+
+curl -X POST http://127.0.0.1:8080/local/exist \
+      -H "Content-Type: application/json" \
+      -d '{"local_path": "local.txt"}'
+
+
+ curl -X POST http://127.0.0.1:8080/local/delete \
+       -H "Content-Type: application/json" \
+       -d '{"local_path": "local.txt"}'

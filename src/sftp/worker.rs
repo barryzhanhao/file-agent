@@ -10,7 +10,7 @@ pub fn start_sftp_workers(rx: Receiver<SftpTask>, worker_count: usize, db: Arc<s
         let db = db.clone();
         thread::spawn(move || {
             while let Ok(mut task) = rx.recv() {
-                println!("[worker-{i}] recv sftp task: {:?}", task);
+                log::info!("[worker-{i}] recv sftp task: {:?}", task);
 
                 match task.task_type.as_str() {
                     "UPLOAD" => {
