@@ -58,8 +58,10 @@ pub async fn start_sftp_workers(
                             .await {
                             task.task_status = "FAILED".into();
                             task.detail_log = format!("上传失败: {}", e);
+                            log::info!("[worker-{i}] task:{task:?} upload failed,e:{e}");
                         } else {
                             task.task_status = "SUCCESS".into();
+                            log::info!("[worker-{i}] task:{task:?} upload success");
                         }
                     }
                     "DOWNLOAD" => {
@@ -70,8 +72,10 @@ pub async fn start_sftp_workers(
                             .await {
                             task.task_status = "FAILED".into();
                             task.detail_log = format!("下载失败: {}", e);
+                            log::info!("[worker-{i}] task:{task:?} download failed,e:{e}");
                         } else {
                             task.task_status = "SUCCESS".into();
+                            log::info!("[worker-{i}] task:{task:?} download success");
                         }
                     }
                     _ => {}

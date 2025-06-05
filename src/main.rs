@@ -2,6 +2,7 @@ mod api;
 mod appstate;
 mod sftp;
 mod storage;
+mod config;
 
 use crate::appstate::appstate::AppState;
 use crate::sftp::worker::start_sftp_workers;
@@ -11,6 +12,7 @@ use env_logger::Env;
 use std::sync::Arc;
 use crate::sftp::client::SftpPool;
 use tokio::sync::mpsc;
+use crate::config::config::SftpConfig;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -22,9 +24,18 @@ async fn main() -> std::io::Result<()> {
 
     let (tx, rx) = mpsc::channel(1024 * 1024);
 
-    let sftp_pool = SftpPool::new(10, "foo", "pass", "localhost", 22).await;
+    let sftp_config = SftpConfig::from_env();
 
-    start_sftp_workers(rx, 4, db.clone(), sftp_pool).await;
+    let sftp_pool = SftpPool::new(
+        num_cpus::get() * 10,
+        &sftp_config.username,
+        &sftp_config.password,
+        &sftp_config.host,
+        sftp_config.port,
+    ).await;
+
+
+    start_sftp_workers(rx, num_cpus::get() * 10, db.clone(), sftp_pool).await;
 
     let state = web::Data::new(AppState { tx, db });
 
