@@ -7,9 +7,10 @@ use crate::appstate::appstate::AppState;
 use crate::sftp::worker::start_sftp_workers;
 use crate::storage::ttl::spawn_ttl_cleaner;
 use actix_web::{App, HttpResponse, HttpServer, middleware::Logger, web};
-use crossbeam::channel::bounded;
 use env_logger::Env;
 use std::sync::Arc;
+use crate::sftp::client::SftpPool;
+use tokio::sync::mpsc;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -19,8 +20,11 @@ async fn main() -> std::io::Result<()> {
 
     spawn_ttl_cleaner(db.clone(), 60 * 60 * 12);
 
-    let (tx, rx) = bounded(1024);
-    start_sftp_workers(rx, num_cpus::get(), db.clone());
+    let (tx, rx) = mpsc::channel(1024 * 1024);
+
+    let sftp_pool = SftpPool::new(10, "foo", "pass", "localhost", 22).await;
+
+    start_sftp_workers(rx, 4, db.clone(), sftp_pool).await;
 
     let state = web::Data::new(AppState { tx, db });
 
@@ -34,6 +38,7 @@ async fn main() -> std::io::Result<()> {
                 HttpResponse::NotFound().body("Not Found")
             }))
     })
+    .workers(num_cpus::get() * 4)
     .bind(("127.0.0.1", 8080))?
     .run()
     .await

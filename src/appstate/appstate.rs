@@ -1,5 +1,5 @@
 use crate::storage::models::SftpTask;
-use crossbeam::channel::Sender;
+use tokio::sync::mpsc::{Sender};
 use sled::Db;
 use std::sync::Arc;
 

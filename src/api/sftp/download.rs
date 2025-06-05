@@ -9,26 +9,18 @@ pub async fn download_file_sftp(
     req: web::Json<SftpFileRequest>,
 ) -> impl Responder {
     let req = req.into_inner();
-    let task_result = web::block(move || {
-        let seq_no = Uuid::new_v4();
-        let task = SftpTask::new_download(seq_no.to_string(), req.remote_path, req.local_path);
-        state.tx.send(task).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("发送任务失败: {}", e))
-        })?;
+    let seq_no = Uuid::new_v4();
+    let task = SftpTask::new_task(seq_no.to_string(), req.remote_path, req.local_path,"DOWNLOAD".to_string());
 
-        Ok::<_, std::io::Error>(seq_no.to_string())
-    })
-    .await;
-
-    match task_result {
-        Ok(Ok(seq_no)) => HttpResponse::Ok()
-            .content_type("application/json")
-            .body(format!(r#"{{"seq_no": "{}"}}"#, seq_no)),
-        Ok(Err(e)) => HttpResponse::InternalServerError()
-            .content_type("application/json")
-            .body(format!(r#"{{"error": "任务提交失败: {}"}}"#, e)),
-        Err(e) => HttpResponse::InternalServerError()
-            .content_type("application/json")
-            .body(format!(r#"{{"error": "线程池错误: {}"}}"#, e)),
+    match state.tx.send(task).await {
+        Ok(_) => {
+            log::info!("任务提交成功: {}", seq_no);
+            HttpResponse::Ok().json(serde_json::json!({ "seq_no": &seq_no.to_string() }))
+        }
+        Err(e) => {
+            log::error!("任务提交失败: {}", e);
+            HttpResponse::InternalServerError()
+                .json(serde_json::json!({ "error": format!("任务提交失败: {}", e) }))
+        }
     }
 }
