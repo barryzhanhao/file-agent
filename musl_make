@@ -6,7 +6,7 @@ cargo build --release --target aarch64-unknown-linux-musl
 
 docker pull rust:1.87-alpine3.22
 
-docker run --rm -it --name rust-musl -v /Users/zhanhao/Opensource:/home/Opensource    --entrypoint sh  rust:1.87-alpine3.22
+docker run -d -it --name rust-musl -v /Users/zhanhao/Opensource:/home/Opensource    --entrypoint sh  rust:1.87-alpine3.22
 
 
 apk add build-base perl wget

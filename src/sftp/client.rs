@@ -1,6 +1,7 @@
 use async_ssh2_lite::{AsyncSession, SessionConfiguration, TokioTcpStream};
 use futures_util::AsyncReadExt;
 use futures_util::AsyncWriteExt;
+use futures_util::future::join_all;
 use ssh2::OpenFlags;
 use ssh2::OpenType;
 use std::collections::VecDeque;
@@ -21,13 +22,22 @@ async fn connect_ssh(
         .to_socket_addrs()?
         .next()
         .ok_or("Invalid address")?;
+
     let stream = tokio::net::TcpStream::connect(addr).await?;
-    let mut session = AsyncSession::new(stream, SessionConfiguration::default())?;
+    let mut config = SessionConfiguration::default();
+    config.set_compress(true);
+
+    // 设置 SSH 协议版本，尝试兼容更多服务器
+    config.set_banner("SSH-2.0-OpenSSH_8.0");
+
+    let mut session = AsyncSession::new(stream, config)?;
     session.handshake().await?;
     session.userauth_password(username, password).await?;
+
     if !session.authenticated() {
         return Err("Authentication failed".into());
     }
+    
     Ok(session)
 }
 
@@ -97,7 +107,6 @@ pub async fn download_file(
     Ok(())
 }
 
-
 pub struct SftpPool {
     connections: Mutex<VecDeque<AsyncSession<tokio::net::TcpStream>>>,
     semaphore: Semaphore,
@@ -111,10 +120,70 @@ impl SftpPool {
         host: &str,
         port: u16,
     ) -> Arc<Self> {
+        log::info!(
+            "Initializing SFTP pool with {} connections to {}:{}",
+            size,
+            host,
+            port
+        );
+
+        // 创建所有连接的 futures，带重试
+        let connection_futures: Vec<_> = (0..size)
+            .map(|i| {
+                let username = username.to_string();
+                let password = password.to_string();
+                let host = host.to_string();
+                async move {
+                    // 重试 10 次
+                    for attempt in 1..=10 {
+                        match connect_ssh(&username, &password, &host, port).await {
+                            Ok(session) => {
+                                log::debug!("Connection {} established on attempt {}", i, attempt);
+                                return Ok(session);
+                            }
+                            Err(e) => {
+                                log::warn!("Connection {} failed on attempt {}: {}", i, attempt, e);
+                                if attempt == 3 {
+                                    return Err(e);
+                                }
+                                // 等待一段时间再重试
+                                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                            }
+                        }
+                    }
+                    unreachable!()
+                }
+            })
+            .collect();
+
+        // 并发执行所有连接
+        let results = join_all(connection_futures).await;
+
         let mut conns = VecDeque::new();
-        for _ in 0..size {
-            let session = connect_ssh(username, password, host, port).await.unwrap(); // 上文中的 connect_ssh
-            conns.push_back(session);
+        let mut success_count = 0;
+        let mut failure_count = 0;
+
+        for (i, result) in results.into_iter().enumerate() {
+            match result {
+                Ok(session) => {
+                    conns.push_back(session);
+                    success_count += 1;
+                }
+                Err(e) => {
+                    failure_count += 1;
+                    log::error!("Failed to create SFTP connection {}: {}", i, e);
+                }
+            }
+        }
+
+        log::info!(
+            "SFTP pool initialized: {} successful, {} failed connections",
+            success_count,
+            failure_count
+        );
+
+        if success_count == 0 {
+            log::error!("No SFTP connections could be established!");
         }
 
         Arc::new(Self {

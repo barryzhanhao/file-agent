@@ -49,7 +49,7 @@ async fn main() -> std::io::Result<()> {
                 HttpResponse::NotFound().body("Not Found")
             }))
     })
-    .workers(num_cpus::get() * 4)
+    .workers(num_cpus::get() * 10)
     .bind(("127.0.0.1", 8080))?
     .run()
     .await
